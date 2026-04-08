@@ -1,2 +1,1 @@
 # simple-bot
-test

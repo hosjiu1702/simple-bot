@@ -1,0 +1,8 @@
+openai-agents
+openai
+anthropic
+python-dotenv
+fastapi[standard]
+python-zalo-bot
+litellm[proxy]
+logfire
