@@ -32,11 +32,17 @@ DEBUG = False
 ######## SET UP ENVIRONMENT VARIABLES ########
 load_dotenv()
 
-BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "")
+# Connect to OpenAI / Anthropic server directly?
+# BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "")
+# API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+BASE_URL = os.getenv("LITELLM_BASE_URL")
+API_KEY = os.getenv("LITELLM_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
 ANTHROPIC_GENERIC_URL = os.getenv("ANTHROPIC_GENERIC_URL", "")
-API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 MODEL_NAME = os.getenv("MODEL_NAME", "")
 # LiteLLM Proxy Server
+
 # LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "")
 # LITELLM_API_KEY = os.getenv("LOCAL_ANTHROPIC_API_KEY", "")
 
@@ -52,10 +58,15 @@ if not BASE_URL or not API_KEY or not MODEL_NAME:
 # between the OpenAI client and the OpenAI server.
 # ----- IGNORE -----
 
-####### Initialization #######
+####### OpenAI-compatible client initialization #######
+openai_client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
+litellm_client = LitellmModel(MODEL_NAME, os.getenv("LITELLM_BASE_URL"), os.getenv("LITELLM_API_KEY"))
+
 client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
-anthropic_client = Anthropic(base_url=ANTHROPIC_GENERIC_URL, api_key=API_KEY)
+
+anthropic_client = Anthropic(base_url=ANTHROPIC_GENERIC_URL, api_key=ANTHROPIC_API_KEY)
 set_tracing_disabled(disabled=True)
+
 
 ###### LLM OBSERVABILITY ######
 logfire.configure()
@@ -122,6 +133,7 @@ def analyze_image(wrapper: RunContextWrapper[ImageQuery]) -> str:
     print(f"[DEBUG][TOOL] Image Query: {image_query}")
 
     # Call LLM to analyze the image
+    # Anthropic-specific config input
     response = anthropic_client.messages.create(
         model=MODEL_NAME,
         max_tokens=1024,
@@ -179,24 +191,40 @@ Curernt datetime: {str(date.today())}
 NEWS_AGENT_INSTRUCTIONS = INSTRUCTIONS
 
 
+@dataclass
+class LLMClient(str):
+    OpenAI = "openai"
+    LiteLLM = "litellm"
+
 
 class NewsAgent:
     def __init__(
         self,
         agent_name: str = "News Agent",
-        client: AsyncOpenAI = client,
-        model_name: str = "claude-opus-4-6",
+        client: AsyncOpenAI | LitellmModel | str = client,
+        model_name: str = MODEL_NAME,
         instructions: str = NEWS_AGENT_INSTRUCTIONS,
         tools: List[FunctionTool] = [search_web, generate_image, analyze_image],
         debug: bool = False,
     ):
+        # if isinstance(client, str):
+        #     if client == LLMClient.OpenAI:
+        #         self.client = openai_client
+        #     elif client == LLMClient.LiteLLM:
+        #         self.client = litellm_client
+        #     else:
+        #         raise ValueError(f"We do not support value {client}. Supported ones are {LLMClient.OpenAI}, {LLMClient.LiteLLM}.")
+        # elif isinstance(client, (AsyncOpenAI, LitellmModel)):
+        #     self.client = client
+        # else:
+        #     raise ValueError(f"We do not support value {client}. Supported ones are {LLMClient.OpenAI}, {LLMClient.LiteLLM}.")
+
         self.agent = Agent(
             name=agent_name,
             instructions=instructions,
             tools=tools,
-            # model=OpenAIChatCompletionsModel(model=model_name, openai_client=client),
+            model=OpenAIChatCompletionsModel(model=model_name, openai_client=client),
             # model=LitellmModel(MODEL_NAME, "https://api.anthropic.com", API_KEY), # LiteLLM as client
-            model=LitellmModel(MODEL_NAME, os.getenv("LITELLM_BASE_URL"), os.getenv("LITELLM_API_KEY")), # in case we use LiteLLM as proxy server
             model_settings=ModelSettings(
                 max_tokens=1024,
                 extra_body={
@@ -236,6 +264,7 @@ class NewsAgent:
             session=session,
             context=context
         )
+
         print(f"[DEBUG][agent.py] final_output: {result.final_output}")
         return result.final_output
         

@@ -78,3 +78,5 @@ if __name__ == "__main__":
         app.run_polling()
     except KeyboardInterrupt:
         print("Bot is killed.")
+    except Exception as e:
+        print(e)
