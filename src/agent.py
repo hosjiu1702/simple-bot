@@ -236,6 +236,7 @@ class NewsAgent:
         if debug:
             import litellm
             litellm._turn_on_debug()
+            print(f"[DEBUG][agent.py] Initialized agent.")
 
     async def reply(
         self,

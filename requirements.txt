@@ -6,3 +6,4 @@ fastapi[standard]
 python-zalo-bot
 litellm[proxy]
 logfire
+flask
