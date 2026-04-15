@@ -8,3 +8,4 @@ litellm[proxy]
 logfire
 flask
 zai-sdk
+prisma
