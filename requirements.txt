@@ -7,3 +7,4 @@ python-zalo-bot
 litellm[proxy]
 logfire
 flask
+zai-sdk

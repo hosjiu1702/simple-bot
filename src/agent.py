@@ -18,6 +18,8 @@ from agents import (
 )
 from agents.extensions.models.litellm_model import LitellmModel
 import litellm
+import requests
+from zai import ZaiClient
 from dotenv import load_dotenv
 import os
 import textwrap
@@ -59,11 +61,10 @@ if not BASE_URL or not API_KEY or not MODEL_NAME:
 # ----- IGNORE -----
 
 ####### OpenAI-compatible client initialization #######
-openai_client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
+# openai_client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
 litellm_client = LitellmModel(MODEL_NAME, os.getenv("LITELLM_BASE_URL"), os.getenv("LITELLM_API_KEY"))
-
 client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
-
+zai_client = ZaiClient(base_url=os.getenv("GLM_BASE_URL"), api_key="")
 anthropic_client = Anthropic(base_url=ANTHROPIC_GENERIC_URL, api_key=ANTHROPIC_API_KEY)
 set_tracing_disabled(disabled=True)
 
@@ -93,32 +94,64 @@ class ImageQuery:
 def search_web(query: str):
     print("Called `search_web` tool.")
     print(f"query: {query}")
-    # we use anthropic sdk here
-    # and call to the built-in web search tool.
-    response = anthropic_client.messages.create(
-        model=MODEL_NAME,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": query}],
-        tools=[{"type": "web_search_20260209", "name": "web_search"}],
-        output_config={"effort": "low"},
-    )
 
-    if DEBUG:
-        print(f"\n[WEB SEARCH TOOL OUTPUT]\n{response.content}")
+    if "claude" in MODEL_NAME:
+        # we use anthropic sdk here
+        # and call to the built-in web search tool.
+        response = anthropic_client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": query}],
+            tools=[{"type": "web_search_20260209", "name": "web_search"}],
+            output_config={"effort": "low"},
+        )
 
-    # print(f"\n#\n#\n#\n: {response}\n\n{response.content[-1].text}")
+        if DEBUG:
+            print(f"\n[WEB SEARCH TOOL OUTPUT]\n{response.content}")
 
-    # https://github.com/anthropics/claude-cookbooks/blob/main/tool_use/programmatic_tool_calling_ptc.ipynb
-    output = "".join([block.text for block in response.content if isinstance(block, TextBlock)])
-    print(f"\n#\n#\n#\n: {response}\n\n{output}")
-    # output = dict({
-    #     "content": [{
-    #         "type": "text",
-    #         "text": f"{response.content[0].text}"
-    #         }
-    #     ]
-    # })
-    return output
+        # print(f"\n#\n#\n#\n: {response}\n\n{response.content[-1].text}")
+        # https://github.com/anthropics/claude-cookbooks/blob/main/tool_use/programmatic_tool_calling_ptc.ipynb
+        output = "".join([block.text for block in response.content if isinstance(block, TextBlock)])
+        print(f"\n#\n#\n#\n: {response}\n\n{output}")
+        return output
+    
+    if "glm" in MODEL_NAME:
+        print(f"[DEBUG][agent.py][search_web] GLM called.")
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": query}],
+            tools=[{
+                "type": "web_search",
+                "web_search": {
+                    "enable": "True",
+                    "search_engine": "search-prime",
+                    "search_result": "True",
+                    "search_prompt": "You are a helful searcher.",
+                    "count": "5",
+                    "search_recency_filter": "noLimit"
+                }
+            }]
+        )
+        return ""
+
+    if "gemini" in MODEL_NAME:
+        response = requests.post(
+            url=f"{os.getenv("LITELLM_BASE_URL")}/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.getenv("LITELLM_API_KEY")}"
+            },
+            json={
+                "model": f"gemini-2.5-flash",
+                "messages": [{"role": "user", "content": query}],
+                "tools": [{"googleSearch": {}}]
+            }
+        )
+        text_output = response.json()["choices"][0]["message"]["content"]
+        print(f"[DEBUG][agent.py][search_web] GEMINI CALLED.\n[Content]: {text_output}")
+        return text_output
+
+    return ""
 
 
 @function_tool
@@ -132,32 +165,35 @@ def analyze_image(wrapper: RunContextWrapper[ImageQuery]) -> str:
     print(f"[DEBUG][TOOL] Image URL: {image_url}")
     print(f"[DEBUG][TOOL] Image Query: {image_query}")
 
-    # Call LLM to analyze the image
-    # Anthropic-specific config input
-    response = anthropic_client.messages.create(
-        model=MODEL_NAME,
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "url",
-                            "url": image_url
-                        }
-                    },
-                    {"type": "text", "text": image_query}
-                ]
-            }
-        ]
-    )
+    if "claude" in MODEL_NAME:
+        # Call LLM to analyze the image
+        # Anthropic-specific config input
+        response = anthropic_client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "url",
+                                "url": image_url
+                            }
+                        },
+                        {"type": "text", "text": image_query}
+                    ]
+                }
+            ]
+        )
+        output = "".join([block.text for block in response.content if isinstance(block, TextBlock)])
+        print(f"[DEBUG][TOOL][anylyze_image]\n#\n#\n#\n: {response}\n\n{output}")
+        return output
 
-    output = "".join([block.text for block in response.content if isinstance(block, TextBlock)])
-    print(f"[DEBUG][TOOL][anylyze_image]\n#\n#\n#\n: {response}\n\n{output}")
+    if "gemini" in MODEL_NAME:
+        pass
 
-    return output
 
 @function_tool
 def generate_image(prompt: str):
@@ -182,7 +218,7 @@ I'm Luky 🐶 which are a helpful assistant that can search the internet or anal
 - Call search_web tool when needed.
 - When user asking or discussing about any image, call analyze_image tool.
 - If input query is *IGNORE*. Return only exact *Nothing*.
-- Always use vietnamese for the final answer.
+- Always generate the final response in the same language used in the user's query.
 
 Curernt datetime: {str(date.today())}
 """).strip()

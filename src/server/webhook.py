@@ -33,7 +33,7 @@ session = SQLiteSession(session_id, conversation_db) # in-memory database
 async def reply_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # await update.message.reply_text(f"You just said: {update.message.text}")
     print("[DEBUG][server.py] The agent is thinking...")
-    pprint(f"[DEBUG][server.py] Current Session: {await session.get_items(limit=5)}")
+    pprint(f"[DEBUG][server.py] Current Session: {await session.get_items(limit=2)}")
 
     # Typing effect
     await context.bot.send_chat_action(
