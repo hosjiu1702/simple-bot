@@ -22,15 +22,15 @@ Like its name, this's an simple QA Zalo Agent serving for my parents.
 - Short-term file-based memory with SQLite database.
 - Currently, I am using **GLM**, **Gemini** and **Claude** as LLM models under the hood.
 
-#### Tools
+### Tools
 
 - Buil-in web search tool.
 
-#### Agent Patterns
+### Agent Patterns
 
 - Single Agent currently.
 
-#### AI Tools
+### AI Tools
 
 - **Cursor** (chat w/ the codebase directly)
 
