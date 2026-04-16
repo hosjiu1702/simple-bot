@@ -4,7 +4,7 @@ Like its name, this's an simple QA Zalo Agent serving for my parents.
 *[WIP]*
 
 ## Installation & Usage
--  I am working on it (*maybe*). But I think you should give a quick look to [python-zalo-bot](https://pypi.org/project/python-zalo-bot/) SDK :) 
+-  I am working on it (*maybe*). But I think you should give a quick look to [python-zalo-bot](https://pypi.org/project/python-zalo-bot/) SDK first :) 
 
 ### Technical Overview
 - **OpenAI Python SDK**.
