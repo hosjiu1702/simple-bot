@@ -83,9 +83,10 @@ class LatestUserMessage:
     message: str
 
 @dataclass
-class ImageQuery:
-    url: str
+class UserQuery:
     query: str
+    url: str = ""
+
 
 ########### TOOL DEFINITION ##########
 # Tool definition using OpenAI SDK which under the hood
@@ -155,7 +156,7 @@ def search_web(query: str):
 
 
 @function_tool
-def analyze_image(wrapper: RunContextWrapper[ImageQuery]) -> str:
+def analyze_image(wrapper: RunContextWrapper[UserQuery]) -> str:
     """ Analyze the image content for a given user query.
     """
     image_url = wrapper.context.url
@@ -211,20 +212,26 @@ def generate_image(prompt: str):
 # Curernt datetime: {str(date.today())}
 # """).strip()
 
-INSTRUCTIONS = textwrap.dedent(f"""
+INSTRUCTIONS = textwrap.dedent("""
 I'm Luky 🐶 which are a helpful assistant that can search the internet or analyse an image given the user query.
 
-- Your answer must be neat and concise.
-- Call search_web tool when needed.
-- When user asking or discussing about any image, call analyze_image tool.
-- If input query is *IGNORE*. Return only exact *Nothing*.
-- Always generate the final response in the same language used in the user's query.
+# GENERAL RULES
+    - Call search_web tool when needed.
+    - When user asking or discussing about any image, call analyze_image tool.
+    - If input query is *IGNORE*. Return only exact *Nothing*.
 
-Curernt datetime: {str(date.today())}
+# RESPONSE STYLE & FORMAT
+    - Concise, polite, mobile-friendly and short form.
+    - response language is the same with this '{query}'
+
+Curernt datetime: {datetime}
 """).strip()
 
-
 NEWS_AGENT_INSTRUCTIONS = INSTRUCTIONS
+
+
+def generate_instructions(wrapper: RunContextWrapper[UserQuery], agent: Agent) -> str:
+    return NEWS_AGENT_INSTRUCTIONS.format(query=wrapper.context.query, datetime=str(date.today()))
 
 
 @dataclass
@@ -257,7 +264,7 @@ class NewsAgent:
 
         self.agent = Agent(
             name=agent_name,
-            instructions=instructions,
+            instructions=generate_instructions,
             tools=tools,
             model=OpenAIChatCompletionsModel(model=model_name, openai_client=client),
             # model=LitellmModel(MODEL_NAME, "https://api.anthropic.com", API_KEY), # LiteLLM as client
@@ -268,7 +275,6 @@ class NewsAgent:
                 }
             )
         )
-
         if debug:
             import litellm
             litellm._turn_on_debug()
@@ -280,27 +286,13 @@ class NewsAgent:
         session: SQLiteSession,
         photo_url: Optional[str] = None
     ):
-        # get conversation history in this session
-        # and then return the latest user message.
-        # items = await session.get_items(limit=1)
-        # if len(items):
-        #     latest_msg = items[-1]
-        # else:
-        #     latest_msg = ""
-        # print(f"[DEBUG][agent.py] latest_msg: {latest_msg}")
-        # user send photo without any caption
         print(f"[DEBUG][agent.py] query: {query}")
 
-        context = None
-        if photo_url:
-            context = ImageQuery(url=photo_url, query=query)
-
-        result = await Runner.run(
-            self.agent,
-            query,
-            session=session,
-            context=context
-        )
+        # Add context for two purposes:
+        #   1. Getting the Image URL
+        #   2. Getting the query for detecting language input
+        context = UserQuery(url=photo_url, query=query) if photo_url else UserQuery(query=query)
+        result = await Runner.run(self.agent, query, context=context, session=session)
 
         print(f"[DEBUG][agent.py] final_output: {result.final_output}")
         return result.final_output
