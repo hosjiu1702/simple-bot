@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pprint import pprint
 from dotenv import load_dotenv
@@ -13,7 +14,7 @@ from zalo_bot.ext import (
     Dispatcher
 )
 from zalo_bot.constants import ChatAction
-from agents import SQLiteSession
+from agents import SQLiteSession, SessionSettings
 from src.agent import NewsAgent
 
 
@@ -28,19 +29,26 @@ news_agent = NewsAgent(debug=True)
 # we temporarily use a dummy session ID for quick testing.
 session_id = "conversation_170296"
 conversation_db = "conversation.db"
-session = SQLiteSession(session_id, conversation_db) # in-memory database
+session = SQLiteSession(
+    session_id, conversation_db,
+    # session_settings=SessionSettings()
+)
 
 async def reply_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # await update.message.reply_text(f"You just said: {update.message.text}")
     print("[DEBUG][server.py] The agent is thinking...")
-    pprint(f"[DEBUG][server.py] Current Session: {await session.get_items(limit=2)}")
 
     # Typing effect
     await context.bot.send_chat_action(
         chat_id=update.message.chat.id,
         action=ChatAction.TYPING
     )
+    await asyncio.sleep(2)
+
+    # LLM inference
     response = await news_agent.reply(query=update.message.text, session=session)
+    
+    # bring the above response back to the zalo user
     await update.message.reply_text(response)
     print(f"Agent responded: {response}")
 
