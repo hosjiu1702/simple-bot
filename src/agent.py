@@ -25,6 +25,9 @@ import os
 import textwrap
 from typing import List, Optional
 from datetime import date
+from src.prompts.generic import GENERAL_INSTRUCTIONS
+from src.schema import UserQuery
+from src.utils import generate_instructions
 
 
 # Local debug session.
@@ -81,11 +84,6 @@ if DEBUG:
 @dataclass
 class LatestUserMessage:
     message: str
-
-@dataclass
-class UserQuery:
-    query: str
-    url: str = ""
 
 
 ########### TOOL DEFINITION ##########
@@ -201,39 +199,6 @@ def generate_image(prompt: str):
     return "here is the generated image: 😁"
 
 
-########## PROMPT ##########
-# INSTRUCTIONS = textwrap.dedent(f"""
-# I'm Luky 🐶 which are a helpful assistant that can search the internet given the user query.
-
-# - Your answer must be neat and concise.
-# - Call search_web tool when needed.
-# - Always use vietnamese for the final answer.
-
-# Curernt datetime: {str(date.today())}
-# """).strip()
-
-INSTRUCTIONS = textwrap.dedent("""
-I'm Luky 🐶 which are a helpful assistant that can search the internet or analyse an image given the user query.
-
-# GENERAL RULES
-    - Call search_web tool when needed.
-    - When user asking or discussing about any image, call analyze_image tool.
-    - If input query is *IGNORE*. Return only exact *Nothing*.
-
-# RESPONSE STYLE & FORMAT
-    - Concise, polite, mobile-friendly and short form.
-    - response language is the same with this '{query}'
-
-Curernt datetime: {datetime}
-""").strip()
-
-NEWS_AGENT_INSTRUCTIONS = INSTRUCTIONS
-
-
-def generate_instructions(wrapper: RunContextWrapper[UserQuery], agent: Agent) -> str:
-    return NEWS_AGENT_INSTRUCTIONS.format(query=wrapper.context.query, datetime=str(date.today()))
-
-
 @dataclass
 class LLMClient(str):
     OpenAI = "openai"
@@ -246,7 +211,7 @@ class NewsAgent:
         agent_name: str = "News Agent",
         client: AsyncOpenAI | LitellmModel | str = client,
         model_name: str = MODEL_NAME,
-        instructions: str = NEWS_AGENT_INSTRUCTIONS,
+        instructions: str = GENERAL_INSTRUCTIONS,
         tools: List[FunctionTool] = [search_web, generate_image, analyze_image],
         debug: bool = False,
     ):
@@ -262,7 +227,7 @@ class NewsAgent:
         # else:
         #     raise ValueError(f"We do not support value {client}. Supported ones are {LLMClient.OpenAI}, {LLMClient.LiteLLM}.")
 
-        self.agent = Agent(
+        self.agent = Agent[UserQuery](
             name=agent_name,
             instructions=generate_instructions,
             tools=tools,
