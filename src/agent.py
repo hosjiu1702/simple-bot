@@ -73,8 +73,8 @@ set_tracing_disabled(disabled=True)
 
 
 ###### LLM OBSERVABILITY ######
-logfire.configure()
-logfire.instrument_openai_agents()
+# logfire.configure()
+# logfire.instrument_openai_agents()
 
 if DEBUG:
     from pprint import pprint
