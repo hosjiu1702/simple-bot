@@ -5,7 +5,7 @@ python-dotenv
 fastapi[standard]
 python-zalo-bot
 litellm[proxy]
-logfire
+logfire>=4.31.0
 flask
 zai-sdk
 prisma
