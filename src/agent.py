@@ -134,21 +134,49 @@ def search_web(query: str):
         return ""
 
     if "gemini" in MODEL_NAME:
-        response = requests.post(
-            url=f"{os.getenv("LITELLM_BASE_URL")}/chat/completions",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {os.getenv("LITELLM_API_KEY")}"
-            },
-            json={
-                "model": f"gemini-2.5-flash",
-                "messages": [{"role": "user", "content": query}],
-                "tools": [{"googleSearch": {}}]
-            }
-        )
-        text_output = response.json()["choices"][0]["message"]["content"]
-        print(f"[DEBUG][agent.py][search_web] GEMINI CALLED.\n[Content]: {text_output}")
-        return text_output
+        if "openrouter" in MODEL_NAME:
+            # Because Google doesn't support for Openrouter now
+            # so we need to work around here by calling directly
+            # to Openrouter server to use web search feature
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.getenv("OPENROUTER_API_KEY")}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "openai/gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": query
+                        }
+                    ],
+                    "tools": [
+                        {"type": "openrouter:web_search"},
+                        {"type": "openrouter:datetime"}
+                    ]
+                }
+            )
+            data = response.json()
+            text_output = data["choices"][0]["message"]["content"]
+            return text_output
+        else:
+            response = requests.post(
+                url=f"{os.getenv("LITELLM_BASE_URL")}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {os.getenv("LITELLM_API_KEY")}"
+                },
+                json={
+                    "model": f"gemini-2.5-flash",
+                    "messages": [{"role": "user", "content": query}],
+                    "tools": [{"googleSearch": {}}]
+                }
+            )
+            text_output = response.json()["choices"][0]["message"]["content"]
+            print(f"[DEBUG][agent.py][search_web] GEMINI CALLED.\n[Content]: {text_output}")
+            return text_output
 
     return ""
 
