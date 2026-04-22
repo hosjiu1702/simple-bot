@@ -43,7 +43,7 @@ async def reply_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.message.chat.id,
         action=ChatAction.TYPING
     )
-    await asyncio.sleep(2)
+    await asyncio.sleep(3)
 
     # LLM inference
     response = await news_agent.reply(query=update.message.text, session=session)
