@@ -55,7 +55,10 @@ async def reply_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(3)
 
     # LLM inference
-    response = await news_agent.reply(query=update.message.text, session=session)
+    response = await news_agent.reply(
+        query=update.message.text, session=session,
+        chat_id=chat_id, zalo_bot=bot
+    )
 
     # bring the above response back to the zalo user
     await update.message.reply_text(response)

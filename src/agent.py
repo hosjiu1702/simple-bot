@@ -6,6 +6,8 @@ from anthropic.types import TextBlock
 from openai import AsyncOpenAI
 from agents import (
     Agent,
+    handoff,
+    Handoff,
     FunctionTool,
     ModelSettings,
     SQLiteSession,
@@ -21,6 +23,7 @@ import litellm
 import requests
 from zai import ZaiClient
 from dotenv import load_dotenv
+from pydantic import BaseModel
 import os
 import textwrap
 from typing import List, Optional, Annotated
@@ -284,6 +287,27 @@ ride_booking_agent = Agent(
     model_settings=ModelSettings(max_tokens=1024),
 )
 
+class JourneyInfo(BaseModel):
+    pickup: str
+    dropoff: str
+
+async def ride_booking_handoff(wrapper: RunContextWrapper[UserQuery], input_data: JourneyInfo):
+    """ Notify back to the user that the booking process just get started """
+    ctx = wrapper.context
+    pickup = input_data.pickup
+    dropoff = input_data.dropoff
+    msg = f"From (điểm đi): {pickup}\n"
+    msg += f"To (điểm đến): {dropoff}"
+    await ctx.zalo_bot.send_message(ctx.chat_id, msg)
+    await asyncio.sleep(1.5)
+    await ctx.zalo_bot.send_message(ctx.chat_id, "⏳")
+
+ride_booking_handoff = handoff(
+    agent=ride_booking_agent,
+    on_handoff=ride_booking_handoff,
+    input_type=JourneyInfo
+)
+
 class NewsAgent:
     def __init__(
         self,
@@ -293,6 +317,7 @@ class NewsAgent:
         instructions: str = GENERAL_INSTRUCTIONS,
         tools: List[FunctionTool] = [search_web, generate_image, analyze_image],
         debug: bool = False,
+        handoffs: Optional[List] = [ride_booking_handoff]
     ):
         # if isinstance(client, str):
         #     if client == LLMClient.OpenAI:
@@ -309,7 +334,7 @@ class NewsAgent:
         self.agent = Agent[UserQuery](
             name=agent_name,
             instructions=generate_instructions,
-            handoffs=[ride_booking_agent],
+            handoffs=handoffs,
             tools=tools,
             model=OpenAIChatCompletionsModel(model=model_name, openai_client=client),
             # model=LitellmModel(MODEL_NAME, "https://api.anthropic.com", API_KEY), # LiteLLM as client
@@ -329,14 +354,16 @@ class NewsAgent:
         self,
         query: str,
         session: SQLiteSession,
-        photo_url: Optional[str] = None
+        photo_url: Optional[str] = None,
+        chat_id: Optional[str] = "",
+        zalo_bot: Optional = None
     ):
         print(f"[DEBUG][agent.py] query: {query}")
 
         # Add context for two purposes:
         #   1. Getting the Image URL
         #   2. Getting the query for detecting language input
-        context = UserQuery(url=photo_url, query=query) if photo_url else UserQuery(query=query)
+        context = UserQuery(url=photo_url, query=query) if photo_url else UserQuery(query=query, chat_id=chat_id, zalo_bot=zalo_bot)
         result = await Runner.run(self.agent, query, context=context, session=session)
 
         print(f"[DEBUG][agent.py] final_output: {result.final_output}")
