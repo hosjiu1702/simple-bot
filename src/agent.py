@@ -23,11 +23,14 @@ from zai import ZaiClient
 from dotenv import load_dotenv
 import os
 import textwrap
-from typing import List, Optional
+from typing import List, Optional, Annotated
 from datetime import date
 from src.prompts.generic import GENERAL_INSTRUCTIONS
 from src.schema import UserQuery
 from src.utils import generate_instructions
+from phone_agent import IOSPhoneAgent
+from phone_agent.model import ModelConfig
+from phone_agent.agent_ios import IOSAgentConfig
 
 
 # Local debug session.
@@ -227,11 +230,59 @@ def generate_image(prompt: str):
     return "here is the generated image: 😁"
 
 
+@function_tool
+def book_a_ride(
+    pickup: Annotated[str, "the pickup location"],
+    destination: Annotated[str, "the dropoff location"]
+):
+    """
+    Book a ride given the pickup and destination locations.
+    """
+    print(f"[DEBUG][book_a_ride] Called.")
+    print(f"[DEBUG][book_a_ride] pickup: {pickup}")
+    print(f"[DEBUG][book_a_ride] destination: {destination}")
+
+    model_config = ModelConfig(
+        base_url=os.getenv("PHONE_AGENT_BASE_URL"),
+        api_key=os.getenv("PHONE_API_KEY"),
+        model_name=os.getenv("PHONE_MODEL_NAME")
+    )
+    agent_config = IOSAgentConfig(
+        wda_url=os.getenv("PHONE_AGENT_WDA_URL"),
+        lang="en",
+        verbose=True
+    )
+    phone_agent = IOSPhoneAgent(
+        model_config=model_config,
+        agent_config=agent_config
+    )
+
+    BOOKING_QUERY = f"""
+    open Grab app, and book a ride (vehicle type is only bike) in which 
+    the current location is {pickup} and the target is {destination}.
+    """
+    print(f"[DEBUG][book_a_ride] running ...")
+    result = phone_agent.run(BOOKING_QUERY)
+
+    return result
+
+
 @dataclass
 class LLMClient(str):
     OpenAI = "openai"
     LiteLLM = "litellm"
 
+
+# Create a dedicated phone agent for phone using and
+# take over the control of the conversation flow.
+ride_booking_agent = Agent(
+    name="Ride Booking Agent",
+    instructions="You are a helpful assistant which help to book a ride for user. Always call book_a_ride tool.",
+    handoff_description="Whenever user asks for ride booking then this agent will be invoked and take over the conversation control.",
+    tools=[book_a_ride],
+    model=OpenAIChatCompletionsModel(model=MODEL_NAME, openai_client=client),
+    model_settings=ModelSettings(max_tokens=1024),
+)
 
 class NewsAgent:
     def __init__(
@@ -258,6 +309,7 @@ class NewsAgent:
         self.agent = Agent[UserQuery](
             name=agent_name,
             instructions=generate_instructions,
+            handoffs=[ride_booking_agent],
             tools=tools,
             model=OpenAIChatCompletionsModel(model=model_name, openai_client=client),
             # model=LitellmModel(MODEL_NAME, "https://api.anthropic.com", API_KEY), # LiteLLM as client
@@ -289,7 +341,7 @@ class NewsAgent:
 
         print(f"[DEBUG][agent.py] final_output: {result.final_output}")
         return result.final_output
-        
+
 
 
 async def main():
